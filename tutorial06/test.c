@@ -352,7 +352,7 @@ static void test_parse() {
     test_parse_number();
     test_parse_string();
     test_parse_array();
-#if 0
+#if 1
     test_parse_object();
 #endif
 
@@ -366,7 +366,7 @@ static void test_parse() {
     test_parse_invalid_unicode_hex();
     test_parse_invalid_unicode_surrogate();
     test_parse_miss_comma_or_square_bracket();
-#if 0
+#if 1
     test_parse_miss_key();
     test_parse_miss_colon();
     test_parse_miss_comma_or_curly_bracket();
@@ -423,6 +423,7 @@ int main() {
 #ifdef _WINDOWS
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
+   // _CrtSetBreakAlloc(127);
     test_parse();
     test_access();
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);

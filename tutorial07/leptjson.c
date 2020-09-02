@@ -348,6 +348,93 @@ int lept_parse(lept_value* v, const char* json) {
 
 static void lept_stringify_string(lept_context* c, const char* s, size_t len) {
     /* ... */
+    char ch;
+    PUTC(c, '"');
+    for (int i = 0; i < len; i++)
+    {
+        ch = s[i];
+        switch (ch){
+            
+            case '\"':  PUTS(c, "\\\"",2); break;
+            case '\\':  PUTS(c, "\\\\",2); break;
+            case '/':  PUTC(c, '/'); break;
+            case '\b':  PUTS(c, "\\b",2); break;
+            case '\f':  PUTS(c, "\\f",2); break;
+            case '\n':  PUTS(c, "\\n",2); break;
+            case '\r':  PUTS(c, "\\r",2); break;
+            case '\t':  PUTS(c, "\\t",2); break;
+            default:
+                if (ch >=0x20 && ch < 0x7F)
+                    PUTC(c, ch);
+                else
+                {
+                    //UTF->codepoint
+                    char cp_ch = ch;
+                    size_t bit = 0;
+                    unsigned codepoint=0;
+                    while (cp_ch & 0x80==0x80) {
+                        bit++;
+                        cp_ch <<= 1;
+                    }
+                    if (bit == 0) {
+                        codepoint = ch;
+                    }
+                    else if (bit == 2) {
+                        codepoint = (ch & 0x1F) << 6 | s[++i] & 0x3F;
+                    }
+                    else if (bit == 3) {
+                        codepoint = (ch & 0x0F) << 12 | (s[++i] & 0x3F)<<6 | s[++i] & 0x3F;
+                    }
+                    else if (bit == 4) {
+                        codepoint = (ch & 0x07) << 18 | (s[++i] & 0x3F) << 12 | (s[++i] & 0x3F) << 6 | (s[++i] & 0x3F);
+                    }
+                    //codepoint->UTF-16
+                    assert(codepoint >= 0x0000 && codepoint <= 0x10FFFF);
+                    if (codepoint >= 0x0000 && codepoint <= 0xFFFF) {
+                        PUTS(c, "\\u", 2);
+                        c->top -= 32 - sprintf(lept_context_push(c, 32), "%04X", codepoint);
+                    }
+                    else {
+                        codepoint = codepoint - 0x10000;
+                        unsigned L = codepoint & 0x01FF;
+                        unsigned H = codepoint - L;
+                        L = L + 0xDC00;
+                        H = H / 0x400 + 0xD800;
+                        PUTS(c, "\\u", 2);
+                        c->top -= 32 - sprintf(lept_context_push(c, 32), "%04X", H);
+                        PUTS(c, "\\u", 2);
+                        c->top -= 32 - sprintf(lept_context_push(c, 32), "%04X", L);
+                    }
+                }
+                break;
+        }
+    }
+    PUTC(c, '"');
+}
+
+static void lept_stringify_value(lept_context* c, const lept_value* v);
+static void lept_stringify_array(lept_context* c, const lept_value* v){
+    PUTC(c, '[');
+    for (int i = 0; i < v->u.a.size; i++)
+    {
+        lept_stringify_value(c, lept_get_array_element(v,i));
+        if (i != v->u.a.size - 1)
+            PUTC(c, ',');
+    }
+    PUTC(c, ']');
+}
+
+static void lept_stringify_object(lept_context* c, const lept_value* v) {
+    PUTC(c, '{');
+    for (int i = 0; i < v->u.o.size; i++)
+    {
+        lept_stringify_string(c, lept_get_object_key(v,i), lept_get_object_key_length(v,i));
+        PUTC(c, ':');
+        lept_stringify_value(c, lept_get_object_value(v,i));
+        if (i != v->u.a.size - 1)
+            PUTC(c, ',');
+    }
+    PUTC(c, '}');
 }
 
 static void lept_stringify_value(lept_context* c, const lept_value* v) {
@@ -359,9 +446,11 @@ static void lept_stringify_value(lept_context* c, const lept_value* v) {
         case LEPT_STRING: lept_stringify_string(c, v->u.s.s, v->u.s.len); break;
         case LEPT_ARRAY:
             /* ... */
+            lept_stringify_array(c, v);
             break;
         case LEPT_OBJECT:
             /* ... */
+            lept_stringify_object(c, v);
             break;
         default: assert(0 && "invalid type");
     }
